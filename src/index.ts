@@ -495,7 +495,7 @@ async function doSearchItem(searchItem: SearchItemData) {
     ]),
   };
   const dbInput = makeDbInput("naoto", dbData.ebaySku, dbData);
-  console.log(JSON.stringify(dbInput));
+  // console.log(JSON.stringify(dbInput));
   await ddbClient.send(new UpdateItemCommand(dbInput));
 
   const inventoryPayload = {
