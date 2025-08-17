@@ -318,7 +318,7 @@ const registerBannedItem = async (itemId: string) => {
       id: { S: `ITEM#naoto#merc-${itemId}` },
     },
     UpdateExpression:
-      "set isDraft = :isDraft, createdAt = :createdAt, username = :username, orgUrl = :orgUrl, orgPlatform = :orgPlatform",
+      "set isDraft = :isDraft, createdAt = :createdAt, orgUrl = :orgUrl, orgPlatform = :orgPlatform",
     ExpressionAttributeValues: {
       ":isDraft": { BOOL: true },
       ":createdAt": { S: getFormattedDate(new Date()) },
