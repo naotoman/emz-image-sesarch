@@ -1,0 +1,12 @@
+{
+  "name": "emz-image-search",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@types/node": "^24.3.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.868.0",
+    "@aws-sdk/client-lambda": "^3.865.0",
+    "@aws-sdk/util-dynamodb": "^3.868.0"
+  }
+}
