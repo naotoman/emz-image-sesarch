@@ -3,7 +3,11 @@ import {
   DynamoDBClient,
   UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb";
-import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import {
+  InvokeCommand,
+  LambdaClient,
+  UpdateFunctionConfigurationCommand,
+} from "@aws-sdk/client-lambda";
 import { marshall } from "@aws-sdk/util-dynamodb";
 
 interface SearchInput {
@@ -85,10 +89,12 @@ interface IsEligible {
 }
 
 interface AiCheck {
+  blocked: boolean;
   exclude: boolean;
 }
 
 interface AiCreate {
+  blocked: boolean;
   shipping_weight_and_box_dimensions: {
     weight: number;
     box_dimensions: {
@@ -159,6 +165,14 @@ function isOver24HoursAgo(pastUnixTimeInSeconds: number) {
   return diffInSeconds >= 24 * 60 * 60; // 24時間 = 86400秒
 }
 
+export async function updateFunction(functionName: string) {
+  const cmd = new UpdateFunctionConfigurationCommand({
+    FunctionName: functionName,
+    Description: `${Math.random()}`,
+  });
+  const response = await lambdaClient.send(cmd);
+}
+
 const makeDbArg = (
   toUpdate: Record<string, unknown>,
   noUpdate: Record<string, unknown>
@@ -204,6 +218,7 @@ const makeDbInput = (
     isImageChanged: false,
     isTitleChanged: false,
     isListed: true,
+    isListedGsi: 1,
     isOrgLive: true,
     scanCount: 0,
   };
@@ -378,9 +393,17 @@ async function doSearchItem(searchItem: SearchItemData) {
   console.log(`Processing item: ${searchItem.id}`);
 
   await waitForMercApiRun(mercApiRunAt);
-  const item: ItemData = await runLambda(LAMBDA_MERC_ITEM, {
-    id: searchItem.id,
-  });
+  let item: ItemData;
+  try {
+    item = await runLambda(LAMBDA_MERC_ITEM, {
+      id: searchItem.id,
+    });
+  } catch (error) {
+    console.log("Merc API item failed.");
+    await updateFunction(LAMBDA_MERC_ITEM);
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+    return false;
+  }
   mercApiRunAt = Date.now();
 
   if (item.status !== "on_sale") {
@@ -409,10 +432,9 @@ async function doSearchItem(searchItem: SearchItemData) {
     thumbnailBase64: itemImages.base64Images[0],
     item,
   });
-
-  if (aiCheckResult.exclude) {
+  if (aiCheckResult.exclude || aiCheckResult.blocked) {
     console.log("AI check result: Excluded");
-    await registerBannedItem(item.id);
+    // await registerBannedItem(item.id);
     return false;
   }
 
@@ -420,6 +442,11 @@ async function doSearchItem(searchItem: SearchItemData) {
     imagesBase64: itemImages.base64Images,
     item,
   });
+  if (aiCreateResult.blocked) {
+    console.log("AI create listing: blocked");
+    // await registerBannedItem(item.id);
+    return false;
+  }
 
   if (isPackageTooBig(aiCreateResult.shipping_weight_and_box_dimensions)) {
     console.log("Package is too big for shipping");
@@ -559,10 +586,15 @@ async function main() {
     console.log(JSON.stringify({ searchInput }));
 
     await waitForMercApiRun(mercApiRunAt);
-    const itemList: SearchItemData[] = await runLambda(
-      LAMBDA_MERC_SEARCH,
-      searchInput
-    );
+    let itemList: SearchItemData[];
+    try {
+      itemList = await runLambda(LAMBDA_MERC_SEARCH, searchInput);
+    } catch (error) {
+      console.log("Merc API search failed.");
+      await updateFunction(LAMBDA_MERC_SEARCH);
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      continue;
+    }
     mercApiRunAt = Date.now();
 
     // idが重複するものを除く（最初に出現したものを残す）
@@ -614,7 +646,7 @@ main()
   .then(() => {
     console.log(
       JSON.stringify({
-        message: "scheduleSearch ended.",
+        message: "Container ended.",
       })
     );
   })
