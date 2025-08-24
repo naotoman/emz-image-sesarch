@@ -355,11 +355,12 @@ const isPackageTooBig = (shipping: {
   };
 }) => {
   const { length, width, height } = shipping.box_dimensions;
-  const fedexVolumeWeight = Math.max(
-    shipping.weight / 1000,
-    (width * height * length) / 5000
-  );
-  if (fedexVolumeWeight > 10 || Math.max(width, height, length) > 80) {
+  const fedexVolume = (width * height * length) / 5000;
+  if (
+    shipping.weight > 8000 ||
+    fedexVolume > 12 ||
+    Math.max(width, height, length) > 80
+  ) {
     return true;
   }
   return false;
@@ -430,27 +431,17 @@ async function doSearchItem(searchItem: SearchItemData) {
     imageUrls: item.photos,
   });
 
-  let aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK, {
+  const aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK_GPT, {
     thumbnailBase64: itemImages.base64Images[0],
     item,
   });
-  if (aiCheckResult.blocked) {
-    console.log("AI check result: blocked, retrying with GPT model");
-    aiCheckResult = await runLambda(LAMBDA_AI_CHECK_GPT, {
-      thumbnailBase64: itemImages.base64Images[0],
-      item,
-    });
-  }
   if (!aiCheckResult.isAllPassed) {
     console.log("AI check result: Excluded");
     await registerBannedItem(item.id);
     return false;
   }
 
-  const lambda_ai_create = aiCheckResult.blocked
-    ? LAMBDA_AI_CREATE_GPT
-    : LAMBDA_AI_CREATE;
-  let aiCreateResult: AiCreate = await runLambda(lambda_ai_create, {
+  let aiCreateResult: AiCreate = await runLambda(LAMBDA_AI_CREATE, {
     imagesBase64: itemImages.base64Images,
     item,
   });
