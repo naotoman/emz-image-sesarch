@@ -90,7 +90,7 @@ interface IsEligible {
 
 interface AiCheck {
   blocked: boolean;
-  exclude: boolean;
+  isAllPassed: boolean;
 }
 
 interface AiCreate {
@@ -141,7 +141,9 @@ const LAMBDA_IS_ELIGIBLE_FOR_LISTING =
   process.env.LAMBDA_IS_ELIGIBLE_FOR_LISTING!;
 const LAMBDA_IMAGE_PROCESSOR = process.env.LAMBDA_IMAGE_PROCESSOR!;
 const LAMBDA_AI_CHECK = process.env.LAMBDA_AI_CHECK!;
+const LAMBDA_AI_CHECK_GPT = process.env.LAMBDA_AI_CHECK_GPT!;
 const LAMBDA_AI_CREATE = process.env.LAMBDA_AI_CREATE!;
+const LAMBDA_AI_CREATE_GPT = process.env.LAMBDA_AI_CREATE_GPT!;
 const LAMBDA_SHORTEN_TITLE = process.env.LAMBDA_SHORTEN_TITLE!;
 const LAMBDA_OFFER_PART = process.env.LAMBDA_OFFER_PART!;
 const LAMBDA_EBAY_LIST = process.env.LAMBDA_EBAY_LIST!;
@@ -428,24 +430,35 @@ async function doSearchItem(searchItem: SearchItemData) {
     imageUrls: item.photos,
   });
 
-  const aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK, {
+  let aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK, {
     thumbnailBase64: itemImages.base64Images[0],
     item,
   });
-  if (aiCheckResult.exclude || aiCheckResult.blocked) {
+  if (aiCheckResult.blocked) {
+    console.log("AI check result: blocked, retrying with GPT model");
+    aiCheckResult = await runLambda(LAMBDA_AI_CHECK_GPT, {
+      thumbnailBase64: itemImages.base64Images[0],
+      item,
+    });
+  }
+  if (!aiCheckResult.isAllPassed) {
     console.log("AI check result: Excluded");
-    // await registerBannedItem(item.id);
+    await registerBannedItem(item.id);
     return false;
   }
 
-  const aiCreateResult: AiCreate = await runLambda(LAMBDA_AI_CREATE, {
+  const lambda_ai_create = aiCheckResult.blocked
+    ? LAMBDA_AI_CREATE_GPT
+    : LAMBDA_AI_CREATE;
+  let aiCreateResult: AiCreate = await runLambda(lambda_ai_create, {
     imagesBase64: itemImages.base64Images,
     item,
   });
   if (aiCreateResult.blocked) {
-    console.log("AI create listing: blocked");
-    // await registerBannedItem(item.id);
-    return false;
+    aiCreateResult = await runLambda(LAMBDA_AI_CREATE_GPT, {
+      imagesBase64: itemImages.base64Images,
+      item,
+    });
   }
 
   if (isPackageTooBig(aiCreateResult.shipping_weight_and_box_dimensions)) {
