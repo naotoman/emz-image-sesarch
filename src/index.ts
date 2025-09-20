@@ -234,7 +234,7 @@ const makeDbInput = (ebaySku: string, attrs: Record<string, unknown>) => {
   return {
     TableName: process.env.TABLE_NAME!,
     Key: {
-      id: { S: `ITEM#$naoto#${ebaySku}` },
+      id: { S: `ITEM#naoto#${ebaySku}` },
     },
     ...makeDbArg(toUpdate, noUpdate),
   };
