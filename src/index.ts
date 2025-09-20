@@ -13,6 +13,8 @@ import { marshall } from "@aws-sdk/util-dynamodb";
 interface SearchInput {
   query: string;
   category: string;
+  min_price: number;
+  store: string;
 }
 
 interface SearchItemData {
@@ -115,6 +117,10 @@ interface AiShortenTitle {
   title: string;
 }
 
+interface AiChooseStore {
+  store: string;
+}
+
 interface OfferPart {
   pricingSummary: {
     price: { currency: "USD"; value: string };
@@ -133,6 +139,7 @@ interface EbayListResult {
   listingId: string;
 }
 
+const DEPLOY_ENV = process.env.DEPLOY_ENV!;
 const TABLE_NAME = process.env.TABLE_NAME!;
 const LAMBDA_GET_SEARCH = process.env.LAMBDA_GET_SEARCH!;
 const LAMBDA_MERC_SEARCH = process.env.LAMBDA_MERC_SEARCH!;
@@ -140,11 +147,12 @@ const LAMBDA_MERC_ITEM = process.env.LAMBDA_MERC_ITEM!;
 const LAMBDA_IS_ELIGIBLE_FOR_LISTING =
   process.env.LAMBDA_IS_ELIGIBLE_FOR_LISTING!;
 const LAMBDA_IMAGE_PROCESSOR = process.env.LAMBDA_IMAGE_PROCESSOR!;
-const LAMBDA_AI_CHECK = process.env.LAMBDA_AI_CHECK!;
+// const LAMBDA_AI_CHECK = process.env.LAMBDA_AI_CHECK!;
 const LAMBDA_AI_CHECK_GPT = process.env.LAMBDA_AI_CHECK_GPT!;
 const LAMBDA_AI_CREATE = process.env.LAMBDA_AI_CREATE!;
 const LAMBDA_AI_CREATE_GPT = process.env.LAMBDA_AI_CREATE_GPT!;
 const LAMBDA_SHORTEN_TITLE = process.env.LAMBDA_SHORTEN_TITLE!;
+const LAMBDA_AI_CHOOSE_STORE = process.env.LAMBDA_AI_CHOOSE_STORE!;
 const LAMBDA_OFFER_PART = process.env.LAMBDA_OFFER_PART!;
 const LAMBDA_EBAY_LIST = process.env.LAMBDA_EBAY_LIST!;
 
@@ -208,11 +216,7 @@ const makeDbArg = (
   return res;
 };
 
-const makeDbInput = (
-  username: string,
-  ebaySku: string,
-  attrs: Record<string, unknown>
-) => {
+const makeDbInput = (ebaySku: string, attrs: Record<string, unknown>) => {
   const toUpdate = {
     ...attrs,
     isDraft: false,
@@ -230,7 +234,7 @@ const makeDbInput = (
   return {
     TableName: process.env.TABLE_NAME!,
     Key: {
-      id: { S: `ITEM#${username}#${ebaySku}` },
+      id: { S: `ITEM#$naoto#${ebaySku}` },
     },
     ...makeDbArg(toUpdate, noUpdate),
   };
@@ -392,7 +396,7 @@ function convertItemDataToParam(itemData: ItemData) {
   };
 }
 
-async function doSearchItem(searchItem: SearchItemData) {
+async function doSearchItem(searchItem: SearchItemData, store: string) {
   console.log(`Processing item: ${searchItem.id}`);
 
   await waitForMercApiRun(mercApiRunAt);
@@ -476,6 +480,39 @@ async function doSearchItem(searchItem: SearchItemData) {
       shortenedTitleResult.title;
   }
 
+  let storeResult = store;
+  if (storeResult === "X") {
+    console.log("choosing store...");
+    let aiChooseStoreResult: AiChooseStore = await runLambda(
+      LAMBDA_AI_CHOOSE_STORE,
+      {
+        title:
+          aiCreateResult.information_for_ebay_listing
+            .listing_title_for_ebay_listing,
+      }
+    );
+    storeResult = aiChooseStoreResult.store;
+  }
+  console.log({ storeResult });
+
+  if (storeResult !== "A" && storeResult !== "B") {
+    console.error(`ERROR storeResult is invalid. ${storeResult}`);
+  }
+
+  const account = (() => {
+    if (DEPLOY_ENV === "dev") return "test";
+    if (storeResult === "A") return "main";
+    return "sub";
+  })();
+
+  const username = (() => {
+    if (DEPLOY_ENV === "dev") return "test";
+    if (storeResult === "A") return "naoto";
+    return "sub";
+  })();
+
+  console.log({ account, username });
+
   const dbData = {
     orgPlatform: "merc",
     orgUrl: `https://jp.mercari.com/item/${item.id}`,
@@ -485,7 +522,7 @@ async function doSearchItem(searchItem: SearchItemData) {
     orgExtraParam: convertItemDataToParam(item),
     ebaySku: `merc-${item.id}`,
     ebayImageUrls: itemImages.r2ImageUrls,
-    username: "naoto",
+    username,
     weightGram: aiCreateResult.shipping_weight_and_box_dimensions.weight,
     boxSizeCm: [
       aiCreateResult.shipping_weight_and_box_dimensions.box_dimensions.length,
@@ -525,7 +562,7 @@ async function doSearchItem(searchItem: SearchItemData) {
       ["Country/Region of Manufacture", ["Japan"]],
     ]),
   };
-  const dbInput = makeDbInput("naoto", dbData.ebaySku, dbData);
+  const dbInput = makeDbInput(dbData.ebaySku, dbData);
   // console.log(JSON.stringify(dbInput));
   await ddbClient.send(new UpdateItemCommand(dbInput));
 
@@ -549,7 +586,7 @@ async function doSearchItem(searchItem: SearchItemData) {
 
   const offerPart: OfferPart = await runLambda(LAMBDA_OFFER_PART, {
     id: item.id,
-    account: "main",
+    account,
     orgPrice: item.price,
     ...aiCreateResult.shipping_weight_and_box_dimensions,
   });
@@ -570,7 +607,7 @@ async function doSearchItem(searchItem: SearchItemData) {
     sku: dbData.ebaySku,
     inventoryPayload,
     offerPayload,
-    account: "main",
+    account,
   });
   listedAt = Date.now();
   console.log(
@@ -588,6 +625,7 @@ async function main() {
 
     const searchInput: SearchInput = await runLambda(LAMBDA_GET_SEARCH, {});
     console.log(JSON.stringify({ searchInput }));
+    if (searchInput.store === "B") continue;
 
     await waitForMercApiRun(mercApiRunAt);
     let itemList: SearchItemData[];
@@ -638,7 +676,7 @@ async function main() {
         console.log("Loop of item ended because of SIGTERM.");
         break;
       }
-      const isListed = await doSearchItem(item);
+      const isListed = await doSearchItem(item, searchInput.store);
       if (isListed) {
         listedCount++;
       }
