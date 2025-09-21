@@ -273,7 +273,7 @@ async function waitForMercApiRun(lastRunAt: number) {
 
 async function waitForEbayList(lastRunAt: number) {
   const elapsedTime = Date.now() - lastRunAt;
-  const randomTime = Math.floor(Math.random() * 3000) + 25000;
+  const randomTime = 15000;
   if (elapsedTime < randomTime) {
     console.log(`waitForEbayList. sleep for ${randomTime - elapsedTime}ms`);
     await new Promise((resolve) =>
@@ -625,7 +625,7 @@ async function main() {
 
     const searchInput: SearchInput = await runLambda(LAMBDA_GET_SEARCH, {});
     console.log(JSON.stringify({ searchInput }));
-    if (searchInput.store === "B") continue;
+    // if (searchInput.store === "B") continue;
 
     await waitForMercApiRun(mercApiRunAt);
     let itemList: SearchItemData[];
