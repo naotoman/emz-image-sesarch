@@ -274,6 +274,7 @@ async function waitForMercApiRun(lastRunAt: number) {
 async function waitForEbayList(lastRunAt: number) {
   const elapsedTime = Date.now() - lastRunAt;
   const randomTime = 15000;
+  // const randomTime = 28000;
   if (elapsedTime < randomTime) {
     console.log(`waitForEbayList. sleep for ${randomTime - elapsedTime}ms`);
     await new Promise((resolve) =>
@@ -532,7 +533,7 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
     ebayTitle:
       aiCreateResult.information_for_ebay_listing
         .listing_title_for_ebay_listing,
-    ebayDescription: `<div style="color: rgb(51, 51, 51); font-family: Arial;"><p>${aiCreateResult.information_for_ebay_listing.promotional_text_for_ebay_listing}</p><h3 style="margin-top: 1.6em;">Condition</h3><p>${aiCreateResult.information_for_ebay_listing.item_condition_description_for_ebay_listing}</p><h3 style="margin-top: 1.6em;">Shipping</h3><p>Tracking numbers are provided to all orders. The item will be carefully packed to ensure it arrives safely.</p><h3 style="margin-top: 1.6em;">Customs and import charges</h3><p>Import duties, taxes, and charges are not included in the item price or shipping cost. Buyers are responsible for these charges. These charges may be collected by the carrier when you receive the item.</p></div>`,
+    ebayDescription: `<div style="color: rgb(51, 51, 51); font-family: Arial;"><p>${aiCreateResult.information_for_ebay_listing.promotional_text_for_ebay_listing}</p><h3 style="margin-top: 1.6em;">Condition</h3><p>${aiCreateResult.information_for_ebay_listing.item_condition_description_for_ebay_listing}</p><h3 style="margin-top: 1.6em;">Shipping</h3><p>Tracking numbers are provided to all orders. The item will be carefully packed to ensure it arrives safely.</p></div>`,
     ebayCategory: "69528",
     ebayStoreCategory: "/Anime Merchandise",
     ebayCondition: "USED_EXCELLENT",
