@@ -46,7 +46,7 @@ interface ItemData {
     {
       id: number;
       name: string;
-    }
+    },
   ];
   item_condition: {
     id: number;
@@ -147,7 +147,7 @@ const LAMBDA_MERC_ITEM = process.env.LAMBDA_MERC_ITEM!;
 const LAMBDA_IS_ELIGIBLE_FOR_LISTING =
   process.env.LAMBDA_IS_ELIGIBLE_FOR_LISTING!;
 const LAMBDA_IMAGE_PROCESSOR = process.env.LAMBDA_IMAGE_PROCESSOR!;
-// const LAMBDA_AI_CHECK = process.env.LAMBDA_AI_CHECK!;
+const LAMBDA_AI_CHECK = process.env.LAMBDA_AI_CHECK!;
 const LAMBDA_AI_CHECK_GPT = process.env.LAMBDA_AI_CHECK_GPT!;
 const LAMBDA_AI_CREATE = process.env.LAMBDA_AI_CREATE!;
 const LAMBDA_AI_CREATE_GPT = process.env.LAMBDA_AI_CREATE_GPT!;
@@ -185,7 +185,7 @@ export async function updateFunction(functionName: string) {
 
 const makeDbArg = (
   toUpdate: Record<string, unknown>,
-  noUpdate: Record<string, unknown>
+  noUpdate: Record<string, unknown>,
 ) => {
   const res = Object.entries({ ...toUpdate, ...noUpdate }).reduce(
     (acc, [key, val], i) => {
@@ -209,7 +209,7 @@ const makeDbArg = (
       ExpressionAttributeNames: {} as Record<string, string>,
       ExpressionAttributeValues: {} as Record<string, any>,
       UpdateExpression: "SET ",
-    }
+    },
   );
   res.ExpressionAttributeValues = marshall(res.ExpressionAttributeValues);
   res.UpdateExpression = res.UpdateExpression.slice(0, -2);
@@ -242,7 +242,7 @@ const makeDbInput = (ebaySku: string, attrs: Record<string, unknown>) => {
 
 const runLambda = async (
   functionName: string,
-  payload: Record<string, any>
+  payload: Record<string, any>,
 ) => {
   const command = new InvokeCommand({
     FunctionName: functionName,
@@ -266,7 +266,7 @@ async function waitForMercApiRun(lastRunAt: number) {
   if (elapsedTime < randomTime) {
     console.log(`waitForMercApiRun. sleep for ${randomTime - elapsedTime}ms`);
     await new Promise((resolve) =>
-      setTimeout(resolve, randomTime - elapsedTime)
+      setTimeout(resolve, randomTime - elapsedTime),
     );
   }
 }
@@ -278,7 +278,7 @@ async function waitForEbayList(lastRunAt: number) {
   if (elapsedTime < randomTime) {
     console.log(`waitForEbayList. sleep for ${randomTime - elapsedTime}ms`);
     await new Promise((resolve) =>
-      setTimeout(resolve, randomTime - elapsedTime)
+      setTimeout(resolve, randomTime - elapsedTime),
     );
   }
 }
@@ -299,7 +299,7 @@ async function filterSearchItems(items: SearchItemData[]) {
             Keys: batchIds.map((id) => ({ id: { S: id } })),
           },
         },
-      })
+      }),
     );
 
     const existingIds = new Set(
@@ -307,12 +307,12 @@ async function filterSearchItems(items: SearchItemData[]) {
         .filter(
           (item) =>
             item.isDraft?.BOOL ||
-            (!item.isImageChanged?.BOOL && !item.isTitleChanged?.BOOL)
+            (!item.isImageChanged?.BOOL && !item.isTitleChanged?.BOOL),
         )
-        .map((item) => item.id.S)
+        .map((item) => item.id.S),
     );
     const filteredBatch = batchItems.filter(
-      (item) => !existingIds.has(`ITEM#naoto#merc-${item.id}`)
+      (item) => !existingIds.has(`ITEM#naoto#merc-${item.id}`),
     );
     filteredItems.push(...filteredBatch);
   }
@@ -423,7 +423,7 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
     LAMBDA_IS_ELIGIBLE_FOR_LISTING,
     {
       item,
-    }
+    },
   );
   if (!isEligibleResult.isEligible) {
     console.log("Item is not eligible for listing");
@@ -436,10 +436,16 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
     imageUrls: item.photos,
   });
 
-  const aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK_GPT, {
+  let aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK, {
     thumbnailBase64: itemImages.base64Images[0],
     item,
   });
+  if (aiCheckResult.blocked) {
+    aiCheckResult = await runLambda(LAMBDA_AI_CHECK_GPT, {
+      thumbnailBase64: itemImages.base64Images[0],
+      item,
+    });
+  }
   if (!aiCheckResult.isAllPassed) {
     console.log("AI check result: Excluded");
     await registerBannedItem(item.id);
@@ -475,7 +481,7 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
         title:
           aiCreateResult.information_for_ebay_listing
             .listing_title_for_ebay_listing,
-      }
+      },
     );
     aiCreateResult.information_for_ebay_listing.listing_title_for_ebay_listing =
       shortenedTitleResult.title;
@@ -490,7 +496,7 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
         title:
           aiCreateResult.information_for_ebay_listing
             .listing_title_for_ebay_listing,
-      }
+      },
     );
     storeResult = aiChooseStoreResult.store;
   }
@@ -543,7 +549,7 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
     ebayAspectParam: Object.fromEntries([
       ...Object.entries(
         aiCreateResult.information_for_ebay_listing
-          .item_specifics_for_ebay_listing
+          .item_specifics_for_ebay_listing,
       )
         .filter(([_, value]) => {
           if (value == null || value === "") return false;
@@ -612,7 +618,7 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
   });
   listedAt = Date.now();
   console.log(
-    `Item ${item.id} listed successfully with eBay listing ID: ${ebayListResult.listingId}`
+    `Item ${item.id} listed successfully with eBay listing ID: ${ebayListResult.listingId}`,
   );
   return true;
 }
@@ -642,7 +648,7 @@ async function main() {
 
     // idが重複するものを除く（最初に出現したものを残す）
     const uniqueItemList = Array.from(
-      new Map(itemList.map((item) => [item.id, item])).values()
+      new Map(itemList.map((item) => [item.id, item])).values(),
     );
 
     // メルカリ商品かつ出品から１日経過のもののみにフィルタリング
@@ -663,7 +669,7 @@ async function main() {
           count: finalItemList.length,
           data: finalItemList,
         },
-      })
+      }),
     );
 
     // 商品リストから商品を登録するループを実行
@@ -690,7 +696,7 @@ main()
     console.log(
       JSON.stringify({
         message: "Container ended.",
-      })
+      }),
     );
   })
   .catch((error) => {
@@ -702,6 +708,6 @@ main()
           message: error.message,
           stack: error.stack,
         },
-      })
+      }),
     );
   });

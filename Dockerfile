@@ -1,4 +1,4 @@
-FROM node:20.18-bookworm
+FROM node:24.14-trixie
 
 RUN npm install -g esbuild
 
