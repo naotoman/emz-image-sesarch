@@ -155,6 +155,7 @@ const LAMBDA_SHORTEN_TITLE = process.env.LAMBDA_SHORTEN_TITLE!;
 const LAMBDA_AI_CHOOSE_STORE = process.env.LAMBDA_AI_CHOOSE_STORE!;
 const LAMBDA_OFFER_PART = process.env.LAMBDA_OFFER_PART!;
 const LAMBDA_EBAY_LIST = process.env.LAMBDA_EBAY_LIST!;
+const LAMBDA_DELETE_S3_IMAGES = process.env.LAMBDA_DELETE_S3_IMAGES!;
 
 let SIGTERM_RECEIVED = false;
 process.on("SIGTERM", () => {
@@ -349,6 +350,9 @@ const registerBannedItem = async (itemId: string) => {
     },
   });
   await ddbClient.send(command);
+  await runLambda(LAMBDA_DELETE_S3_IMAGES, {
+    id: itemId,
+  });
 };
 
 const isPackageTooBig = (shipping: {
