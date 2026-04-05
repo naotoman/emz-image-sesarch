@@ -440,32 +440,20 @@ async function doSearchItem(searchItem: SearchItemData, store: string) {
     imageUrls: item.photos,
   });
 
-  let aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK, {
+  const aiCheckResult: AiCheck = await runLambda(LAMBDA_AI_CHECK_GPT, {
     thumbnailBase64: itemImages.base64Images[0],
     item,
   });
-  if (aiCheckResult.blocked) {
-    aiCheckResult = await runLambda(LAMBDA_AI_CHECK_GPT, {
-      thumbnailBase64: itemImages.base64Images[0],
-      item,
-    });
-  }
   if (!aiCheckResult.isAllPassed) {
     console.log("AI check result: Excluded");
     await registerBannedItem(item.id);
     return false;
   }
 
-  let aiCreateResult: AiCreate = await runLambda(LAMBDA_AI_CREATE, {
+  const aiCreateResult: AiCreate = await runLambda(LAMBDA_AI_CREATE_GPT, {
     imagesBase64: itemImages.base64Images,
     item,
   });
-  if (aiCreateResult.blocked) {
-    aiCreateResult = await runLambda(LAMBDA_AI_CREATE_GPT, {
-      imagesBase64: itemImages.base64Images,
-      item,
-    });
-  }
 
   if (isPackageTooBig(aiCreateResult.shipping_weight_and_box_dimensions)) {
     console.log("Package is too big for shipping");
