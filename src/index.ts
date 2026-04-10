@@ -217,11 +217,17 @@ const makeDbArg = (
   return res;
 };
 
+function getTimestampAfter24Hours() {
+  const now = Date.now(); // 現在のタイムスタンプ（ミリ秒）
+  const twelveHoursLater = now + 24 * 60 * 60 * 1000;
+  return twelveHoursLater;
+}
 const makeDbInput = (ebaySku: string, attrs: Record<string, unknown>) => {
   const toUpdate = {
     ...attrs,
     isDraft: false,
     createdAt: getFormattedDate(new Date()),
+    nextScan: getTimestampAfter24Hours(),
     isImageChanged: false,
     isTitleChanged: false,
     isListed: true,
